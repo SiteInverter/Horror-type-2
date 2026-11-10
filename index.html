@@ -1,0 +1,722 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>DON'T LOOK BACK</title>
+<style>
+* {
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+html,body {
+  margin:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#020403;
+  color:white;
+  font-family:Arial,sans-serif;
+  touch-action:none;
+}
+#game {
+  width:100%;
+  height:100%;
+  display:block;
+  background:#000;
+}
+#hud {
+  position:absolute;
+  top:12px;
+  left:14px;
+  right:14px;
+  display:flex;
+  justify-content:space-between;
+  pointer-events:none;
+  font-size:12px;
+  letter-spacing:2px;
+  text-shadow:0 2px 5px black;
+}
+#message {
+  position:absolute;
+  top:18%;
+  left:50%;
+  transform:translateX(-50%);
+  text-align:center;
+  font-size:13px;
+  letter-spacing:3px;
+  color:#ddd;
+  text-shadow:0 2px 8px black;
+  pointer-events:none;
+  width:90%;
+}
+#controls {
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+}
+#joystick {
+  position:absolute;
+  left:25px;
+  bottom:25px;
+  width:120px;
+  height:120px;
+  border:2px solid #ffffff50;
+  border-radius:50%;
+  background:#ffffff12;
+  pointer-events:auto;
+  touch-action:none;
+}
+#stick {
+  position:absolute;
+  width:48px;
+  height:48px;
+  left:34px;
+  top:34px;
+  border-radius:50%;
+  background:#ffffff80;
+  border:2px solid #ffffffa0;
+  pointer-events:none;
+}
+#lookArea {
+  position:absolute;
+  right:0;
+  top:0;
+  width:55%;
+  height:75%;
+  pointer-events:auto;
+  touch-action:none;
+}
+.actions {
+  position:absolute;
+  right:20px;
+  bottom:22px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  pointer-events:auto;
+}
+.action {
+  border:1px solid #ffffff60;
+  color:white;
+  background:#07100dcc;
+  border-radius:50%;
+  width:64px;
+  height:64px;
+  font-size:11px;
+  letter-spacing:1px;
+  touch-action:none;
+}
+.action:active {
+  background:#45584a;
+}
+#screen {
+  position:absolute;
+  inset:0;
+  background:radial-gradient(ellipse,#111b16 0%,#020403 75%);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  padding:25px;
+}
+#screen h1 {
+  font-size:clamp(32px,8vw,70px);
+  letter-spacing:9px;
+  margin:0 0 12px;
+  text-shadow:0 0 22px #63796b;
+}
+#screen p {
+  color:#9ca69e;
+  max-width:480px;
+  line-height:1.7;
+  font-size:13px;
+}
+#start {
+  background:#d8ded9;
+  color:#07100b;
+  border:0;
+  padding:16px 34px;
+  margin-top:22px;
+  font-weight:bold;
+  letter-spacing:3px;
+  font-size:13px;
+}
+#rotateNotice {
+  display:none;
+  position:absolute;
+  inset:0;
+  z-index:20;
+  background:#030604;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  letter-spacing:3px;
+  font-size:14px;
+}
+@media (orientation:portrait) {
+  #rotateNotice {display:flex;}
+}
+@media (orientation:landscape) {
+  #joystick {width:105px;height:105px;left:22px;bottom:18px;}
+  #stick {left:28px;top:28px;}
+  .actions {right:18px;bottom:16px;flex-direction:row;}
+  .action {width:57px;height:57px;}
+}
+</style>
+</head>
+<body>
+
+<canvas id="game" width="400" height="250"></canvas>
+
+<div id="hud">
+  <span id="objective">SIGNAL PARTS: 0 / 3</span>
+  <span id="battery">BATTERY: 100%</span>
+</div>
+<div id="message"></div>
+
+<div id="controls">
+  <div id="lookArea"></div>
+  <div id="joystick"><div id="stick"></div></div>
+  <div class="actions">
+    <button class="action" id="flash">LIGHT</button>
+    <button class="action" id="run">RUN</button>
+    <button class="action" id="interact">USE</button>
+  </div>
+</div>
+
+<div id="rotateNotice">↻<br><br>TURN YOUR PHONE SIDEWAYS</div>
+
+<div id="screen">
+  <h1 id="title">DON'T LOOK BACK</h1>
+  <p id="description">
+    2:17 AM.<br>
+    You wake up in a forest with no signal.<br>
+    Something is following you.<br><br>
+    Find three signal parts. Reach the exit.<br>
+    Whatever you hear behind you... keep moving.
+  </p>
+  <button id="start">ENTER THE FOREST</button>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const W = canvas.width, H = canvas.height;
+
+const map = [
+"################",
+"#..............#",
+"#..##..........#",
+"#........##....#",
+"#..............#",
+"#....##........#",
+"#..............#",
+"#..#...........#",
+"#..#....##.....#",
+"#..............#",
+"#......#.......#",
+"#..............#",
+"#....##........#",
+"#..............#",
+"#..............#",
+"################"
+];
+
+const player = {x:2.5,y:2.5,a:0.15};
+const monster = {x:12.5,y:3.5};
+const parts = [
+  {x:6.5,y:3.5,got:false},
+  {x:11.5,y:8.5,got:false},
+  {x:4.5,y:12.5,got:false}
+];
+const notes = [
+  {x:2.5,y:8.5,got:false,text:"I heard footsteps behind me. When I stopped... they stopped too."},
+  {x:10.5,y:4.5,got:false,text:"It doesn't follow the light. It follows the sound."}
+];
+
+let running=false;
+let flashlight=true;
+let battery=100;
+let collected=0;
+let noteCount=0;
+let gameTime=0;
+let lastTime=0;
+let messageTime=0;
+let monsterVisible=true;
+let monsterCooldown=0;
+let monsterAggro=0;
+let footstepsTimer=0;
+let audioCtx=null;
+let master=null;
+let windOsc=null;
+let runningHeld=false;
+let joy={x:0,y:0};
+let lookPointer=null;
+let lastLookX=0;
+let lastLookY=0;
+let lastInteract=0;
+let ending=false;
+
+const distance=(x,y)=>Math.hypot(x,y);
+const norm=a=>Math.atan2(Math.sin(a),Math.cos(a));
+const random=(a,b)=>a+Math.random()*(b-a);
+
+function openTile(x,y) {
+  const mx=Math.floor(x), my=Math.floor(y);
+  return map[my]?.[mx] !== "#";
+}
+function say(text,seconds=2.5) {
+  document.getElementById("message").textContent=text;
+  messageTime=seconds;
+}
+function tone(freq,duration,volume=.05,type="sine") {
+  if(!audioCtx || !master) return;
+  const o=audioCtx.createOscillator();
+  const g=audioCtx.createGain();
+  o.type=type;
+  o.frequency.value=freq;
+  g.gain.setValueAtTime(volume,audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+duration);
+  o.connect(g);
+  g.connect(master);
+  o.start();
+  o.stop(audioCtx.currentTime+duration);
+}
+function noise(duration=.2,volume=.025) {
+  if(!audioCtx || !master) return;
+  const length=Math.floor(audioCtx.sampleRate*duration);
+  const buffer=audioCtx.createBuffer(1,length,audioCtx.sampleRate);
+  const data=buffer.getChannelData(0);
+  for(let i=0;i<length;i++) data[i]=Math.random()*2-1;
+  const source=audioCtx.createBufferSource();
+  const gain=audioCtx.createGain();
+  source.buffer=buffer;
+  gain.gain.value=volume;
+  source.connect(gain);
+  gain.connect(master);
+  source.start();
+}
+function startAudio() {
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  master=audioCtx.createGain();
+  master.gain.value=.7;
+  master.connect(audioCtx.destination);
+  const o=audioCtx.createOscillator();
+  const g=audioCtx.createGain();
+  o.type="sine";
+  o.frequency.value=42;
+  g.gain.value=.035;
+  o.connect(g);
+  g.connect(master);
+  o.start();
+  windOsc=o;
+}
+function playFootstep() {
+  noise(.09,.035);
+  tone(65,.08,.025,"triangle");
+}
+function horrorSound() {
+  tone(38,1.2,.08,"sawtooth");
+  noise(.6,.04);
+}
+
+function move(dx,dy) {
+  const r=.2;
+  if(openTile(player.x+dx+r,player.y) &&
+     openTile(player.x+dx-r,player.y)) player.x+=dx;
+  if(openTile(player.x,player.y+dy+r) &&
+     openTile(player.x,player.y+dy-r)) player.y+=dy;
+}
+
+function cast(angle) {
+  const step=.035;
+  let d=0;
+  while(d<18) {
+    d+=step;
+    const x=player.x+Math.cos(angle)*d;
+    const y=player.y+Math.sin(angle)*d;
+    if(!openTile(x,y)) return d;
+  }
+  return 18;
+}
+
+let depthBuffer=[];
+
+function drawWorld() {
+  const image=ctx.createImageData(W,H);
+  const data=image.data;
+  for(let y=0;y<H;y++) {
+    for(let x=0;x<W;x++) {
+      let shade;
+      if(y<H/2) {
+        const v=y/(H/2);
+        shade=5+v*5;
+      } else {
+        const v=(y-H/2)/(H/2);
+        shade=9-v*8;
+      }
+      const i=(y*W+x)*4;
+      data[i]=shade*.7;
+      data[i+1]=shade*1.2;
+      data[i+2]=shade*.85;
+      data[i+3]=255;
+    }
+  }
+  ctx.putImageData(image,0,0);
+  depthBuffer=[];
+  for(let x=0;x<W;x++) {
+    const angle=player.a+(x/W-.5)*1.15;
+    const d=cast(angle)*Math.cos(angle-player.a);
+    depthBuffer[x]=d;
+    const wallH=Math.min(H*2,H/(d+.001));
+    const top=H/2-wallH/2;
+    const sideShade=Math.max(0,1-d/12);
+    const texture=(Math.random()*.12);
+    const brightness=(sideShade*(flashlight?1:.38))*105;
+    ctx.fillStyle=`rgb(${brightness*.45+texture*10},${brightness*.75+texture*15},${brightness*.5+texture*8})`;
+    ctx.fillRect(x,top,1,wallH);
+    if(x%7===0) {
+      ctx.fillStyle="rgba(0,0,0,.12)";
+      ctx.fillRect(x,top,1,wallH);
+    }
+  }
+}
+
+function drawSprite(x,y,type) {
+  const dx=x-player.x, dy=y-player.y;
+  const dist=Math.hypot(dx,dy);
+  let angle=norm(Math.atan2(dy,dx)-player.a);
+  if(Math.abs(angle)>0.9 || dist<.1) return;
+  const screenX=(.5+angle/1.15)*W;
+  const size=Math.min(H*1.8,H/(dist+.01));
+  const centerY=H/2;
+  const col=Math.floor(screenX);
+  if(col<0||col>=W||dist>depthBuffer[col]+.3) return;
+
+  ctx.save();
+  ctx.translate(screenX,centerY);
+  const scale=size/100;
+  ctx.scale(scale,scale);
+
+  if(type==="monster") {
+    const alpha=Math.min(1,1-dist/19);
+    ctx.globalAlpha=alpha;
+    // Long, distorted silhouette
+    ctx.fillStyle="#020302";
+    ctx.beginPath();
+    ctx.ellipse(0,-25,13,25,0,0,Math.PI*2);
+    ctx.fill();
+    ctx.fillRect(-9,-5,18,65);
+    ctx.beginPath();
+    ctx.moveTo(-9,0);ctx.lineTo(-24,65);
+    ctx.lineTo(-17,67);ctx.lineTo(-2,12);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(9,0);ctx.lineTo(25,64);
+    ctx.lineTo(18,67);ctx.lineTo(3,12);
+    ctx.fill();
+    ctx.fillRect(-8,50,6,45);
+    ctx.fillRect(3,50,6,45);
+    // Face
+    ctx.fillStyle="#c8d1b5";
+    ctx.shadowColor="#a6c58a";
+    ctx.shadowBlur=12;
+    ctx.fillRect(-7,-31,4,3);
+    ctx.fillRect(4,-31,4,3);
+    ctx.fillStyle="#080000";
+    ctx.fillRect(-6,-17,13,3);
+    ctx.restore();
+    return;
+  }
+
+  if(type==="part") {
+    ctx.fillStyle="#a6e6b5";
+    ctx.shadowColor="#8affaa";
+    ctx.shadowBlur=25;
+    ctx.fillRect(-8,-8,16,16);
+    ctx.fillStyle="white";
+    ctx.fillRect(-2,-2,4,4);
+  }
+  if(type==="exit") {
+    ctx.fillStyle="#18291e";
+    ctx.fillRect(-20,-45,40,90);
+    ctx.strokeStyle="#9bcaa0";
+    ctx.lineWidth=3;
+    ctx.strokeRect(-20,-45,40,90);
+    ctx.fillStyle="#b6e8bc";
+    ctx.fillRect(-4,-4,3,3);
+  }
+  if(type==="note") {
+    ctx.fillStyle="#c5c0a0";
+    ctx.fillRect(-10,-12,20,24);
+    ctx.fillStyle="#303326";
+    ctx.fillRect(-6,-6,12,2);
+    ctx.fillRect(-6,0,12,2);
+  }
+  ctx.restore();
+}
+
+function drawSprites() {
+  const sprites=[];
+  parts.forEach(p=>{if(!p.got)sprites.push({...p,type:"part"});});
+  notes.forEach(n=>{if(!n.got)sprites.push({...n,type:"note"});});
+  sprites.push({x:13.5,y:13.5,type:"exit"});
+  if(monsterVisible) sprites.push({...monster,type:"monster"});
+  sprites.sort((a,b)=>distance(b.x-player.x,b.y-player.y)-distance(a.x-player.x,a.y-player.y));
+  for(const s of sprites) drawSprite(s.x,s.y,s.type);
+}
+
+function drawOverlay() {
+  const grad=ctx.createRadialGradient(W/2,H/2,10,W/2,H/2,H*.75);
+  grad.addColorStop(0,flashlight?"rgba(0,0,0,0)":"rgba(0,0,0,.88)");
+  grad.addColorStop(.55,"rgba(0,0,0,.18)");
+  grad.addColorStop(1,"rgba(0,0,0,.88)");
+  ctx.fillStyle=grad;
+  ctx.fillRect(0,0,W,H);
+
+  if(flashlight) {
+    const glow=ctx.createRadialGradient(W/2,H/2,5,W/2,H/2,H*.45);
+    glow.addColorStop(0,"rgba(210,230,190,.13)");
+    glow.addColorStop(1,"rgba(210,230,190,0)");
+    ctx.fillStyle=glow;
+    ctx.fillRect(0,0,W,H);
+  }
+  // Film grain
+  for(let i=0;i<350;i++) {
+    ctx.fillStyle=Math.random()>.5?"rgba(255,255,255,.025)":"rgba(0,0,0,.08)";
+    ctx.fillRect(Math.random()*W,Math.random()*H,1,1);
+  }
+}
+
+function draw() {
+  drawWorld();
+  drawSprites();
+  drawOverlay();
+}
+
+function updateMonster(dt) {
+  const dx=player.x-monster.x;
+  const dy=player.y-monster.y;
+  const d=Math.hypot(dx,dy);
+  monsterAggro+=dt;
+  monsterCooldown-=dt;
+
+  const angle=norm(Math.atan2(dy,dx)-player.a);
+  const inBeam=flashlight && battery>0 &&
+    Math.abs(angle)<.20 && d<9;
+
+  if(inBeam && monsterVisible && monsterCooldown<=0) {
+    monsterVisible=false;
+    monsterCooldown=random(5,9);
+    say("...WHERE DID IT GO?",2.5);
+    tone(48,.7,.08,"sawtooth");
+  }
+  if(!monsterVisible && monsterCooldown<=0) {
+    monsterVisible=true;
+    monsterCooldown=random(6,11);
+    if(d<7) {
+      say("YOU HEAR SOMETHING MOVING.",2.5);
+      horrorSound();
+    }
+  }
+
+  if(d>1.0) {
+    const speed=(collected>=2?.95:.48)*dt;
+    const mx=(dx/d)*speed;
+    const my=(dy/d)*speed;
+    if(openTile(monster.x+mx,monster.y)) monster.x+=mx;
+    if(openTile(monster.x,monster.y+my)) monster.y+=my;
+  }
+  if(d<.55) endGame(false);
+}
+
+function collect() {
+  for(const p of parts) {
+    if(!p.got && distance(player.x-p.x,player.y-p.y)<.85) {
+      p.got=true;
+      collected++;
+      battery=Math.min(100,battery+12);
+      say("SIGNAL PART FOUND.",2);
+      tone(620,.15,.06);
+      tone(820,.25,.04);
+      document.getElementById("objective").textContent=`SIGNAL PARTS: ${collected} / 3`;
+    }
+  }
+  for(const n of notes) {
+    if(!n.got && distance(player.x-n.x,player.y-n.y)<.8) {
+      n.got=true;
+      noteCount++;
+      say(n.text,5);
+      tone(240,.3,.04);
+    }
+  }
+  if(distance(player.x-13.5,player.y-13.5)<1) {
+    if(collected>=3) endGame(true);
+    else say("THE EXIT IS LOCKED. FIND THE SIGNAL PARTS.",2);
+  }
+}
+
+function endGame(won) {
+  if(ending) return;
+  ending=true;
+  running=false;
+  document.getElementById("screen").style.display="flex";
+  document.getElementById("title").textContent=won?
+    (noteCount===2?"THE TRUTH":"YOU ESCAPED"):"IT FOUND YOU";
+  document.getElementById("description").textContent=won?
+    (noteCount===2?
+    "You found the signal parts. But the notes tell a different story. Something was already waiting outside the forest.":
+    "The signal is restored. You made it out of the forest. But you can still hear footsteps in the distance."):
+    "The forest is quiet again. Your flashlight lies on the ground. Something is still watching.";
+  document.getElementById("start").textContent="PLAY AGAIN";
+}
+
+function update(dt) {
+  if(!running) return;
+  gameTime+=dt;
+  messageTime-=dt;
+  if(messageTime<=0) document.getElementById("message").textContent="";
+
+  const keyboardForward=(keys.w||keys.ArrowUp?1:0)-(keys.s||keys.ArrowDown?1:0);
+  const keyboardSide=(keys.d||keys.ArrowRight?1:0)-(keys.a||keys.ArrowLeft?1:0);
+  const forward=keyboardForward-joy.y;
+  const side=keyboardSide+joy.x;
+  const moving=Math.abs(forward)+Math.abs(side)>.08;
+  const speed=(runningHeld||keys.Shift?2.8:1.65)*dt;
+  const dx=(Math.cos(player.a)*forward-Math.sin(player.a)*side)*speed;
+  const dy=(Math.sin(player.a)*forward+Math.cos(player.a)*side)*speed;
+  if(moving) {
+    move(dx,dy);
+    footstepsTimer-=dt;
+    if(footstepsTimer<=0) {
+      playFootstep();
+      footstepsTimer=runningHeld?.27:.48;
+    }
+  } else footstepsTimer=0;
+
+  battery=Math.max(0,battery-(flashlight?.75:0)*dt);
+  if(battery<=0) flashlight=false;
+
+  updateMonster(dt);
+  collect();
+
+  document.getElementById("battery").textContent=`BATTERY: ${Math.floor(battery)}%`;
+  document.getElementById("flash").textContent=flashlight?"LIGHT ON":"LIGHT OFF";
+}
+
+const keys={};
+window.addEventListener("keydown",e=>{
+  keys[e.key]=true;
+  if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault();
+  if(e.key.toLowerCase()==="f") toggleFlash();
+  if(e.key==="e") collect();
+});
+window.addEventListener("keyup",e=>keys[e.key]=false);
+
+function toggleFlash() {
+  if(battery>0) {
+    flashlight=!flashlight;
+    tone(flashlight?300:140,.12,.03);
+  } else say("BATTERY EMPTY.",1.5);
+}
+
+document.getElementById("flash").addEventListener("pointerdown",e=>{
+  e.preventDefault();toggleFlash();
+});
+document.getElementById("run").addEventListener("pointerdown",e=>{
+  e.preventDefault();runningHeld=true;
+});
+["pointerup","pointercancel","pointerleave"].forEach(type=>{
+  document.getElementById("run").addEventListener(type,()=>runningHeld=false);
+});
+document.getElementById("interact").addEventListener("pointerdown",e=>{
+  e.preventDefault();collect();
+});
+
+// Virtual joystick
+const joystick=document.getElementById("joystick");
+const stick=document.getElementById("stick");
+let joyPointer=null;
+joystick.addEventListener("pointerdown",e=>{
+  e.preventDefault();
+  joyPointer=e.pointerId;
+  joystick.setPointerCapture(e.pointerId);
+  updateJoy(e);
+});
+joystick.addEventListener("pointermove",e=>{
+  if(e.pointerId===joyPointer) updateJoy(e);
+});
+function updateJoy(e) {
+  const r=joystick.getBoundingClientRect();
+  const cx=r.left+r.width/2, cy=r.top+r.height/2;
+  let dx=e.clientX-cx,dy=e.clientY-cy;
+  const max=35;
+  const len=Math.hypot(dx,dy);
+  if(len>max) {dx=dx/len*max;dy=dy/len*max;}
+  joy.x=dx/max;
+  joy.y=dy/max;
+  stick.style.transform=`translate(${dx}px,${dy}px)`;
+}
+function resetJoy() {
+  joyPointer=null;
+  joy={x:0,y:0};
+  stick.style.transform="translate(0,0)";
+}
+joystick.addEventListener("pointerup",resetJoy);
+joystick.addEventListener("pointercancel",resetJoy);
+
+// Drag right side to look around
+const look=document.getElementById("lookArea");
+look.addEventListener("pointerdown",e=>{
+  e.preventDefault();
+  lookPointer=e.pointerId;
+  lastLookX=e.clientX;
+  lastLookY=e.clientY;
+  look.setPointerCapture(e.pointerId);
+});
+look.addEventListener("pointermove",e=>{
+  if(e.pointerId!==lookPointer) return;
+  const dx=e.clientX-lastLookX;
+  player.a+=dx*.006;
+  lastLookX=e.clientX;
+  lastLookY=e.clientY;
+});
+look.addEventListener("pointerup",()=>lookPointer=null);
+look.addEventListener("pointercancel",()=>lookPointer=null);
+
+window.addEventListener("contextmenu",e=>e.preventDefault());
+window.addEventListener("selectstart",e=>e.preventDefault());
+
+document.getElementById("start").addEventListener("click",()=>{
+  if(ending) {
+    location.reload();
+    return;
+  }
+  document.getElementById("screen").style.display="none";
+  running=true;
+  try {
+    startAudio();
+    if(audioCtx.state==="suspended") audioCtx.resume();
+  } catch(e) {}
+  if(screen.orientation?.lock) {
+    screen.orientation.lock("landscape").catch(()=>{});
+  }
+  say("2:17 AM. FIND A WAY OUT.",3);
+});
+
+function loop(time) {
+  const dt=Math.min((time-lastTime)/1000,.05);
+  lastTime=time;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
